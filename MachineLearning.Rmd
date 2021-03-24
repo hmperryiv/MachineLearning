@@ -1,0 +1,131 @@
+### Deciding the quality of a work out.
+
+
+This is the machine learning algorithm that I generated to determine if a workout was of high quality. 
+
+
+#### First we load the libraries.
+```{r create directory, cache=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+library(tibble)
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(readr)
+library(caret)
+if(!file.exists("data")){
+  dir.create("data")
+}
+```
+
+#### Next we will load the data and store it under a directory './data'
+```{r get data, cache=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrl,destfile="./data/pmltraining.csv",method="curl")
+fileUrl2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrl2,destfile="./data/pmltesting.csv",method="curl")
+list.files("./data")
+dateDownloaded <- date()
+dateDownloaded
+```
+
+
+#### Next we will load the data into a dataframe.
+``` {r read data, cache=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+measurements <- (read_delim(file = "./data/pmltraining.csv", col_names = TRUE,
+                      delim = ","))
+```
+
+#### Next the data needs to be cleaned.
+
+
+In the initial data set there are 160 variables in each observation.
+
+For my machine learning, i only looked at the gyros_, accel_, and magnet_ fields for the dumbell, forearm, arm, and wrist fields.  In addition I also used the timestamp and num_window field as well.
+
+This reduced my observations from 160 to 38.
+
+
+``` {r cleaning the data, cache=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+
+measurements <- bind_cols(measurements[3:7],measurements[37:45], measurements[60:68], measurements[113:120], measurements[151:160])
+measurements <- add_column(measurements, cvt_time = as_datetime(measurements$raw_timestamp_part_1 + measurements$raw_timestamp_part_2))
+measurements <- bind_cols(measurements[6:42], measurements[5])
+head(measurements)
+```
+#### Create Training and Test Sets
+
+
+Next I created a training and a test set.  The training set is about 60% of the data, and the test set is about 40% of the data.
+
+
+``` {r create training and test sets, cache=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+
+inTrain <- createDataPartition(y=measurements$classe,
+                              p=.6, list=FALSE)
+training <- measurements[inTrain,]
+test <-   measurements[-inTrain,]
+```
+
+#### Exploratory Data Analysis.
+
+
+Below are several plots that show there is some relationship between the accel_, gyros_, and magnet_ values and any one of the 4 areas where the sensors were worn.  I will use this as the basis for my machine learning algorithm.  
+
+I also got concurance on this opinion from the paper that was referenced below:
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Read more: <a href="http:/groupware.les.inf.puc-rio.br/har#weight_lifting_exercises#ixzz4TkQaPnXd">Source</a>
+
+
+``` {r explorator data analysis, cache=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+
+featurePlot(x=training[,c("accel_belt_x", "accel_belt_y", "accel_belt_z")],
+             y = factor(training$classe),
+            plot="pairs", no.legend=F)
+
+featurePlot(x=training[,c("gyros_belt_x", "gyros_belt_y", "gyros_belt_z")],
+            y = factor(training$classe),
+            plot="pairs", no.legend=F)
+
+featurePlot(x=training[,c("magnet_belt_x", "magnet_belt_y", "magnet_belt_z")],
+            y = factor(training$classe),
+            plot="pairs", no.legend=F)
+
+```
+#### Model Generation
+
+
+Next I will train my model using the training data set.  For this I used a random forest, initially I did try this with a boosting algorithm but I later found that the random forest algorithm provided a higher level of accuracy against the training set. 
+
+
+``` {r create model1, cache=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+
+modelFit <- train(classe ~. -num_window,data=training, method="rf",  allowParrallel = TRUE)
+
+modelFit
+```
+
+
+As you can see here is that the accuracy of this model is about 96%.
+
+
+#### Future Predictions
+
+
+Below are my future predictions using the separate training set that I generated at the beginning.
+
+
+``` {r predicting new values, cache=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+pred <- predict(modelFit,test);
+
+test$predRight <- pred==test$classe
+table(pred,test$classe)
+
+qplot(cvt_time,num_window,colour=predRight,data=test,main="newdata Predictions")
+```
+
+#### Conclusion
+
+
+As you can see from the above table, my algorithm was highly effective at identifying the classe of workout given the gyros_, accel_, and magnet_ observations for all for sources (dumbbell, forearm, arm, belt)

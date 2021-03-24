@@ -1,0 +1,13 @@
+base
+tibble
+tidyverse
+ggplot2
+tidyr
+readr
+purrr
+dplyr
+stringr
+forcats
+lubridate
+lattice
+caret
